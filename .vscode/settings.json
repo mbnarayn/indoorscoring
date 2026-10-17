@@ -1,0 +1,5 @@
+{
+    "appService.showBuildDuringDeployPrompt": false,
+    "appService.defaultWebAppToDeploy": "/subscriptions/4af32745-2595-4566-bad5-a52a6240d6b6/resourceGroups/rg-isa-01/providers/Microsoft.Web/sites/app-isa-01",
+    "appService.deploySubpath": "."
+}

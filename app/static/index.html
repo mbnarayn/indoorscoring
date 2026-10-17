@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d2e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Indoor Scorer">
+  <meta name="description" content="Live ball-by-ball indoor cricket scoring">
+  <title>Indoor Cricket Scorer</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="apple-touch-startup-image" href="/static/icons/splash-1170x2532.png">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/js/api.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body>
+  <div id="splash" class="splash" aria-hidden="true">
+    <img src="/static/icons/icon-192.png" alt="" width="96" height="96">
+    <div class="splash-title">Indoor Cricket Scorer</div>
+  </div>
+  <header class="topbar">
+    <button id="nav-back" class="icon-btn" aria-label="Back" hidden>&#8249;</button>
+    <h1 id="title">Indoor Scorer</h1>
+    <span id="net" class="net-badge" hidden>OFFLINE</span>
+    <button id="theme-btn" class="icon-btn" aria-label="Change theme" title="Dark / Light / High contrast">&#9680;</button>
+  </header>
+  <main id="view" class="view"></main>
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-body" id="sheet-body" role="dialog" aria-modal="true"></div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
