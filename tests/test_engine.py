@@ -123,6 +123,12 @@ def test_fielders_recorded_on_caught_and_run_out():
     assert e.current.batters["t0p0"].dismissal == "run out (Bravo1)"
 
 
+def test_stumped_records_keeper_and_credits_bowler():
+    e = Builder().add(start(), ball(0, dismissal={"type": "stumped", "fielders": ["t1p2"]})).engine()
+    assert e.current.batters["t0p0"].dismissal == "st Bravo2 b Bravo0"
+    assert e.current.bowlers["t1p0"].wickets == 1
+
+
 def test_invalid_fielders_rejected():
     with pytest.raises(MatchError):
         Builder().add(start(), ball(0, dismissal={"type": "caught", "fielders": ["t1p1", "t1p2"]})).engine()

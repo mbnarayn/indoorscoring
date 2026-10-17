@@ -12,10 +12,11 @@
     ['bowled', 'Bowled'],
     ['caught', 'Caught'],
     ['run_out', 'Run out'],
+    ['stumped', 'Stumped'],
     ['hit_wicket', 'Hit wicket'],
     ['other', 'Other'],
   ];
-  const STRIKER_ONLY = ['bowled', 'caught', 'hit_wicket'];
+  const STRIKER_ONLY = ['bowled', 'caught', 'stumped', 'hit_wicket'];
   const EXTRAS = [
     ['wide', 'Wide'],
     ['no_ball', 'No ball'],
@@ -49,7 +50,67 @@
 
   function setTitle(text, back) {
     $('#title').textContent = text;
+    $('#brand').classList.toggle('brand-home', !back && text === 'Indoor Cricket Scoring App');
     $('#nav-back').hidden = !back;
+  }
+
+  async function hasScorerAccess() {
+    try {
+      const session = await Api.scorerSession();
+      if (!session.authenticated) {
+        sessionStorage.removeItem('scorer_unlocked');
+        return !navigator.onLine && sessionStorage.getItem('scorer_unlocked') === 'true';
+      }
+      sessionStorage.setItem('scorer_unlocked', 'true');
+      return true;
+    } catch (err) {
+      if (err.status === 401) sessionStorage.removeItem('scorer_unlocked');
+      return !navigator.onLine && sessionStorage.getItem('scorer_unlocked') === 'true';
+    }
+  }
+
+  async function requireScorer(returnTo) {
+    if (await hasScorerAccess()) return true;
+    setTitle('Scorer access', true);
+    viewEl.innerHTML = `<form id="scorer-login" class="stack form">
+      <label>Scorer password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn btn-primary" type="submit">Unlock scorer</button>
+    </form>`;
+    $('#scorer-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = e.currentTarget.elements.password;
+      const submit = e.currentTarget.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      try {
+        await Api.loginScorer(input.value);
+        sessionStorage.setItem('scorer_unlocked', 'true');
+        if (pendingImportFile) {
+          const file = pendingImportFile;
+          pendingImportFile = null;
+          if (location.hash === returnTo) await route();
+          else location.hash = returnTo;
+          return importMatchFile(file);
+        }
+        if (location.hash === returnTo) route();
+        else location.hash = returnTo;
+      } catch (err) {
+        toast(err.message || 'Scorer login failed', 4000);
+        input.select();
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    return false;
+  }
+
+  async function lockScorer() {
+    try {
+      await Api.logoutScorer();
+      sessionStorage.removeItem('scorer_unlocked');
+      location.hash = '#/';
+    } catch (err) {
+      toast(err.message || 'Could not lock scorer', 4000);
+    }
   }
 
   function updateNet() {
@@ -112,18 +173,18 @@
   $('#nav-back').addEventListener('click', () => {
     const h = location.hash;
     if (h.endsWith('/details')) location.hash = h.replace(/\/details$/, '');
-    else location.hash = h.endsWith('/scorecard') && ctx.lastStatus !== 'completed' ? h.replace(/\/scorecard$/, '') : '#/';
+    else location.hash = '#/';
   });
 
   // ------------------------------------------------------------------ home --
 
   async function renderHome() {
-    setTitle('Indoor Scorer', false);
+    setTitle('Indoor Cricket Scoring App', false);
     viewEl.innerHTML = `<div class="stack">
       <a class="btn btn-primary btn-xl" href="#/new">+ New Match</a>
-      <label class="btn btn-secondary">Import Match JSON<input type="file" id="import-file" accept="application/json,.json" hidden></label>
       <h2>Resume Match</h2><div id="list-progress" class="list"><div class="muted">Loading…</div></div>
       <h2>Completed Matches</h2><div id="list-done" class="list"></div>
+      <label class="import-link">Import match JSON<input type="file" id="import-file" accept="application/json,.json" hidden></label>
     </div>`;
     $('#import-file').addEventListener('change', onImport);
 
@@ -136,7 +197,7 @@
     }
     const card = (m) => {
       const pending = Store.outbox(m.id).length;
-      const href = `#/match/${esc(m.id)}${m.status === 'completed' ? '/scorecard' : ''}`;
+      const href = `#/match/${esc(m.id)}/scorecard`;
       return `<div class="card match-card">
         <a class="card-main" href="${href}">
           <strong>${esc(m.name)}</strong>
@@ -144,10 +205,9 @@
           <span>${esc(m.headline)}${pending ? ` <span class="badge">${pending} unsynced</span>` : ''}</span>
         </a>
         <div class="card-actions">
+          <a class="btn btn-small" href="#/match/${esc(m.id)}">Scorer</a>
           <a class="btn btn-small" href="#/match/${esc(m.id)}/details">Setup</a>
           <a class="btn btn-small" href="${Api.pdfUrl(m.id)}" download>PDF</a>
-          <a class="btn btn-small" href="${Api.exportUrl(m.id)}" download>Export</a>
-          <button class="btn btn-small btn-danger" data-act="delete" data-id="${esc(m.id)}" data-name="${esc(m.name)}">Delete</button>
         </div></div>`;
     };
     const progress = matches.filter((m) => m.status !== 'completed');
@@ -156,9 +216,15 @@
     $('#list-done').innerHTML = done.map(card).join('') || '<div class="muted">No completed matches.</div>';
   }
 
+  let pendingImportFile = null;
+
   async function onImport(e) {
     const file = e.target.files[0];
     e.target.value = '';
+    await importMatchFile(file);
+  }
+
+  async function importMatchFile(file) {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) return toast('File is too large');
     try {
@@ -167,11 +233,17 @@
       toast('Match imported');
       location.hash = `#/match/${v.match.id}${v.match.status === 'completed' ? '/scorecard' : ''}`;
     } catch (err) {
+      if (err.status === 401) {
+        pendingImportFile = file;
+        await requireScorer(location.hash || '#/');
+        return;
+      }
       toast(err.message, 5000);
     }
   }
 
-  function deleteMatch(id, name) {
+  async function deleteMatch(id, name) {
+    if (!(await requireScorer(location.hash || '#/'))) return;
     openSheet(
       `<h2>Delete match</h2>
       <div>Delete <b>${esc(name)}</b>? This cannot be undone.</div>
@@ -211,7 +283,8 @@
       .map((name) => ({ name }));
   }
 
-  function renderNew() {
+  async function renderNew() {
+    if (!(await requireScorer('#/new'))) return;
     setTitle('New Match', true);
     const now = new Date();
     const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -280,6 +353,7 @@
   }
 
   async function renderMatch(id) {
+    if (!(await requireScorer(`#/match/${id}`))) return;
     ctx.matchId = id;
     ctx.syncError = null;
     resetDraft();
@@ -450,6 +524,7 @@
       <a class="btn btn-small" href="#/match/${id}/scorecard">Scorecard</a>
       <a class="btn btn-small" href="#/match/${id}/details">Setup</a>
       <button class="btn btn-small" data-act="end-innings">End innings</button>
+      <button class="btn btn-small" data-act="lock-scorer">Lock scorer</button>
     </div>`;
   }
 
@@ -464,13 +539,10 @@
     // Striker must be chosen for every ball; without a current innings (queued offline) the server decides.
     const lock = !d.striker && ctx.view.state.current ? 'disabled' : '';
     const extraRuns = ctx.view.state.current?.extra_runs || { wide: 2, no_ball: 2 };
-    return `${scoreboardHtml()}${battersHtml()}${bowlerLineHtml()}${overHtml(pending)}${draftHtml()}
+    return `<div class="scoring-screen">${scoreboardHtml()}${battersHtml()}${bowlerLineHtml()}${overHtml(pending)}${draftHtml()}
       <div class="pad pad-runs">
         ${range(0, 6).map((n) => `<button class="btn-run" data-act="runs" data-n="${n}" ${lock}>${n}</button>`).join('')}
         <button class="btn-run btn-out" data-act="wicket" ${lock}>OUT</button>
-      </div>
-      <div class="pad pad-minus">
-        ${[-1, -2, -3].map((n) => `<button class="btn-minus" data-act="runs" data-n="${n}" ${lock}>${n}</button>`).join('')}
       </div>
       <div class="custom-runs">
         <input id="custom-runs" type="number" inputmode="numeric" min="0" max="${MAX_RUNS}" step="1"
@@ -484,7 +556,7 @@
         <button class="btn-retire" data-act="retire-one">Retire Batsman</button>
         <button class="btn-retire" data-act="retire-both">Retire Both</button>
       </div>
-      ${utilHtml(offline)}${undoHtml()}`;
+      ${utilHtml(offline)}${undoHtml()}</div>`;
   }
 
   function pickerHtml(title, items, act) {
@@ -665,7 +737,7 @@
     ids.forEach((id) => submit('event', { type: 'retire', batsman: id }));
   }
 
-  const MAX_FIELDERS = { caught: 1, run_out: 2 };
+  const MAX_FIELDERS = { caught: 1, run_out: 2, stumped: 1 };
 
   function openWicketSheet() {
     const [strikerId, nonId] = crease();
@@ -676,7 +748,8 @@
     const fieldersHtml = () => {
       const max = MAX_FIELDERS[w.type];
       if (!max) return '';
-      const title = w.type === 'caught' ? 'Caught by' : 'Run out by <span class="muted">(1 for a direct hit, or 2)</span>';
+      const title =
+        w.type === 'caught' ? 'Caught by' : w.type === 'stumped' ? 'Stumped by' : 'Run out by <span class="muted">(1 for a direct hit, or 2)</span>';
       return `<h3>${title}</h3><div class="grid3">${fieldingSide
         .map((p) => {
           const idx = w.fielders.indexOf(p.id);
@@ -685,34 +758,30 @@
         })
         .join('')}</div>`;
     };
-    const ready = () => !MAX_FIELDERS[w.type] || w.fielders.length > 0;
+    const ready = () => Boolean(w.type) && (!MAX_FIELDERS[w.type] || w.fielders.length > 0);
     const draw = () =>
       openSheet(
-        `<h2>Dismissal</h2>
+        `<div class="dismissal-screen"><h2>Dismissal</h2>
         <div class="grid3">${DISMISSALS.map(
           ([t, l]) => `<button class="choice ${w.type === t ? 'sel' : ''}" data-act="dtype" data-t="${t}">${l}</button>`
         ).join('')}</div>
-        ${
-          w.type
-            ? `<h3>Batsman</h3><div class="grid2">${[strikerId, nonId]
-                .filter(Boolean)
-                .map(
-                  (pid) => `<button class="choice ${w.batsman === pid ? 'sel' : ''}" data-act="dbat" data-id="${esc(pid)}"
-                    ${STRIKER_ONLY.includes(w.type) && pid !== strikerId ? 'disabled' : ''}>
-                    <span>${esc(playerName(pid))}</span><small>${pid === strikerId ? 'Striker' : 'Non-striker'}</small></button>`
-                )
-                .join('')}</div>
-              ${fieldersHtml()}
-              <h3>Runs on this ball <span class="muted">${ready() ? '(tap to record)' : '(select fielder first)'}</span></h3>
-              <div class="grid4">${range(0, 6)
-                .map((n) => `<button class="btn-run" data-act="druns" data-n="${n}" ${ready() ? '' : 'disabled'}>${n}</button>`)
-                .join('')}</div>
-              <div class="grid3">${[-1, -2, -3]
-                .map((n) => `<button class="btn-minus" data-act="druns" data-n="${n}" ${ready() ? '' : 'disabled'}>${n}</button>`)
-                .join('')}</div>`
-            : ''
-        }
-        <button class="btn" data-act="close">Cancel</button>`,
+        <h3>Batsman</h3><div class="grid2">${[strikerId, nonId]
+          .filter(Boolean)
+          .map(
+            (pid) => `<button class="choice ${w.batsman === pid ? 'sel' : ''}" data-act="dbat" data-id="${esc(pid)}"
+              ${STRIKER_ONLY.includes(w.type) && pid !== strikerId ? 'disabled' : ''}>
+              <span>${esc(playerName(pid))}</span><small>${pid === strikerId ? 'Striker' : 'Non-striker'}</small></button>`
+          )
+          .join('')}</div>
+        ${fieldersHtml()}
+        <h3>Runs on this ball <span class="muted">${!w.type ? '(select dismissal first)' : ready() ? '(tap to record)' : '(select fielder first)'}</span></h3>
+        <div class="grid4">${range(0, 6)
+          .map((n) => `<button class="btn-run" data-act="druns" data-n="${n}" ${ready() ? '' : 'disabled'}>${n}</button>`)
+          .join('')}</div>
+        <div class="grid3">${[-1, -2, -3]
+          .map((n) => `<button class="btn-minus" data-act="druns" data-n="${n}" ${ready() ? '' : 'disabled'}>${n}</button>`)
+          .join('')}</div>
+        <button class="btn" data-act="close">Cancel</button></div>`,
         (act, ds) => {
           if (act === 'dtype') {
             w.type = ds.t;
@@ -840,6 +909,7 @@
     setTitle('Scorecard', true);
     viewEl.innerHTML = '<div class="muted pad-top">Loading…</div>';
     const sc = await Api.scorecard(id);
+    const scorerUnlocked = await hasScorerAccess();
     ctx.scorecard = { id, innings: sc.innings };
     ctx.lastStatus = sc.match.status;
     setTitle(sc.match.name, true);
@@ -859,9 +929,10 @@
       .map((inn) => {
         const bat = inn.batting
           .map(
-            (b) => `<tr class="${b.status === 'retired' ? 'retired' : ''}"><td><div>${esc(b.name)}</div><small>${esc(b.dismissal || '')}${
-              b.pair_dismissals?.length ? ` · out ${b.pair_dismissals.length}× in pairs: ${esc(b.pair_dismissals.join('; '))}` : ''
-            }</small></td>
+            (b) => `<tr class="${b.status === 'retired' ? 'retired' : ''}"><td><div>${esc(b.name)}</div>
+              <small>${esc(b.dismissal || '')}</small>${(b.pair_dismissals || [])
+                .map((dismissal, i) => `<small class="pair-dismissal">Pair ${i + 1}: ${esc(dismissal)}</small>`)
+                .join('')}</td>
               <td><b>${b.runs}</b></td><td>${b.balls}</td><td>${b.fours}</td><td>${b.sixes}</td><td>${fmt(b.strike_rate, 1)}</td></tr>`
           )
           .join('');
@@ -876,13 +947,14 @@
         inn.balls.forEach((b, bi) => {
           const last = overs[overs.length - 1];
           if (!last || last.over !== b.over) overs.push({ over: b.over, bowler: b.bowler_name, balls: [] });
-          overs[overs.length - 1].balls.push(
-            `<button class="chip chip-btn ${chipClass(b.label)}" data-act="sc-edit" data-inn="${inn.number - 1}" data-i="${bi}"
-              title="${esc(b.striker_name)} facing">${esc(b.label)}</button>`
-          );
+          const chip = scorerUnlocked
+            ? `<button class="chip chip-btn ${chipClass(b.label)}" data-act="sc-edit" data-inn="${inn.number - 1}" data-i="${bi}"
+                title="${esc(b.striker_name)} facing">${esc(b.label)}</button>`
+            : `<span class="chip ${chipClass(b.label)}" title="${esc(b.striker_name)} facing">${esc(b.label)}</span>`;
+          overs[overs.length - 1].balls.push(chip);
         });
         const ballByBall = overs.length
-          ? `<details class="bbb"><summary>Ball by ball <span class="muted">(tap a ball to edit)</span></summary>
+          ? `<details class="bbb"><summary>Ball by ball ${scorerUnlocked ? '<span class="muted">(tap a ball to edit)</span>' : ''}</summary>
               ${overs
                 .map((o) => `<div class="bbb-over"><span class="muted">Ov ${o.over} · ${esc(o.bowler)}</span><div class="bbb-balls">${o.balls.join('')}</div></div>`)
                 .join('')}</details>`
@@ -903,11 +975,11 @@
       })
       .join('');
     const actions = `<div class="stack">
-      ${sc.match.status !== 'completed' ? `<a class="btn btn-primary btn-xl" href="#/match/${esc(id)}">Continue Scoring</a>` : ''}
+      <a class="btn btn-primary btn-xl" href="#/match/${esc(id)}">Scorer</a>
       <a class="btn" href="#/match/${esc(id)}/details">Edit Match Setup</a>
       <a class="btn" href="${Api.pdfUrl(id)}" download>Export PDF Scorecard</a>
-      <a class="btn" href="${Api.exportUrl(id)}" download>Export Match JSON</a>
       <button class="btn btn-danger" data-act="delete" data-id="${esc(id)}" data-name="${esc(sc.match.name)}">Delete Match</button>
+      <a class="backup-link" href="${Api.exportUrl(id)}" download>Backup Match as JSON</a>
     </div>`;
     viewEl.innerHTML = `<div class="stack">${summary}${innings}${actions}</div>`;
   }
@@ -915,6 +987,7 @@
   // --------------------------------------------------------- match details --
 
   async function renderDetails(id) {
+    if (!(await requireScorer(`#/match/${id}/details`))) return;
     setTitle('Match Setup', true);
     viewEl.innerHTML = '<div class="muted pad-top">Loading…</div>';
     const v = await Api.getMatch(id);
@@ -1040,6 +1113,8 @@
     switch (ds.act) {
       case 'delete':
         return deleteMatch(ds.id, ds.name);
+      case 'lock-scorer':
+        return lockScorer();
       case 'runs':
         return submitBall(Number(ds.n), null);
       case 'custom-runs':

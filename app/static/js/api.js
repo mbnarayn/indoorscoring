@@ -37,6 +37,9 @@ const Api = (() => {
   const m = (id) => `/api/matches/${encodeURIComponent(id)}`;
 
   return {
+    scorerSession: () => request('GET', '/api/scorer/session'),
+    loginScorer: (password) => request('POST', '/api/scorer/session', { password }),
+    logoutScorer: () => request('DELETE', '/api/scorer/session'),
     listMatches: () => request('GET', '/api/matches'),
     createMatch: (body) => request('POST', '/api/matches', body),
     getMatch: (id) => request('GET', m(id)),

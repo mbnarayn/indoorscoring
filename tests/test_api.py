@@ -10,8 +10,9 @@ from app.storage.local import LocalJsonStorageProvider
 
 @pytest.fixture
 def client(tmp_path):
-    settings = Settings(storage_provider="local", data_dir=tmp_path, delete_password="test-pass")
+    settings = Settings(storage_provider="local", data_dir=tmp_path, delete_password="test-pass", scorer_password="scorer-test")
     with TestClient(create_app(settings)) as c:
+        c.post("/api/scorer/session", json={"password": "scorer-test"})
         yield c
 
 
@@ -59,6 +60,26 @@ def test_full_match_flow(client, tmp_path):
 
     listing = client.get("/api/matches?status=completed").json()
     assert [m["id"] for m in listing] == [mid]
+
+
+def test_scorer_password_protects_live_api_but_not_scorecard(client):
+    mid = client.post("/api/matches", json=MATCH).json()["match"]["id"]
+    client.cookies.clear()
+
+    assert client.get("/api/matches").status_code == 200
+    assert client.get(f"/api/matches/{mid}/scorecard").status_code == 200
+    assert client.get("/api/scorer/session").json() == {"authenticated": False}
+    assert client.get(f"/api/matches/{mid}").status_code == 401
+    assert client.post(f"/api/matches/{mid}/events", json={"event": {"type": "ball", "runs": 1}}).status_code == 401
+    assert client.get(f"/api/matches/{mid}/export").status_code == 200
+    assert client.post("/api/scorer/session", json={"password": "wrong"}).status_code == 403
+
+    login = client.post("/api/scorer/session", json={"password": "scorer-test"})
+    assert login.status_code == 200
+    assert login.headers["set-cookie"].lower().find("httponly") >= 0
+    assert client.get(f"/api/matches/{mid}").status_code == 200
+    assert client.delete("/api/scorer/session").status_code == 204
+    assert client.get(f"/api/matches/{mid}").status_code == 401
 
 
 def test_invalid_event_returns_400_and_is_not_saved(client):

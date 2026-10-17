@@ -12,6 +12,7 @@ class Settings:
     azure_container: str = field(default_factory=lambda: os.getenv("AZURE_STORAGE_CONTAINER", "matches"))
     max_import_bytes: int = field(default_factory=lambda: int(os.getenv("MAX_IMPORT_BYTES", str(2 * 1024 * 1024))))
     delete_password: str = field(default_factory=lambda: os.getenv("DELETE_PASSWORD") or "miltonkeynes600028")
+    scorer_password: str = field(default_factory=lambda: os.getenv("SCORER_PASSWORD") or "scorer28")
 
 
 def get_settings() -> Settings:

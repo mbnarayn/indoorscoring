@@ -97,6 +97,7 @@ python -m pytest -q
 | `AZURE_STORAGE_CONTAINER` | `matches` | Blob container (created if missing) |
 | `MAX_IMPORT_BYTES` | `2097152` | Maximum size of an imported match file |
 | `DELETE_PASSWORD` | `miltonkeynes600028` | Password the app asks for before deleting a match. Set your own value in production. |
+| `SCORER_PASSWORD` | `scorer28` | Password required for scorer actions. Set a strong value in production. |
 
 You switch storage providers through these variables alone. Both providers store the same JSON document.
 
@@ -114,18 +115,18 @@ Create the Azure resources yourself, then deploy the code with one of the option
 ### Required App Service configuration
 
 - **Web app:** Linux, runtime `PYTHON|3.14`, B1 or higher (Always On), HTTPS only.
-- **Startup command:** `bash startup.sh` ([startup.sh](startup.sh) installs `requirements.txt` into `/home/site/deps` if the platform build didn't, then starts uvicorn on `0.0.0.0:8000`)
+- **Startup command:** leave **empty**. App Service auto-detects [application.py](application.py) and runs `gunicorn application:app`; [gunicorn.conf.py](gunicorn.conf.py) switches gunicorn to the uvicorn (ASGI) worker with a single process.
+- **Package install:** [.deployment](.deployment) sets `SCM_DO_BUILD_DURING_DEPLOYMENT=true`, so `requirements.txt` is installed on every deploy.
 - **Health check path:** `/api/health`
 - **App settings:**
-  - `SCM_DO_BUILD_DURING_DEPLOYMENT=true` (Oryx installs `requirements.txt`)
-  - `STORAGE_PROVIDER=local` with `DATA_DIR=/home/data` (persists across restarts), or `STORAGE_PROVIDER=azure_blob` with `AZURE_STORAGE_ACCOUNT_URL` and `AZURE_STORAGE_CONTAINER`
+  - `STORAGE_PROVIDER=local` with `DATA_DIR=/home/data` (required: the app runs from a temporary folder, so only `/home` persists), or `STORAGE_PROVIDER=azure_blob` with `AZURE_STORAGE_ACCOUNT_URL` and `AZURE_STORAGE_CONTAINER`
   - `DELETE_PASSWORD` set to your own value
 - **For `azure_blob`:** enable the web app's system-assigned managed identity and give it the **Storage Blob Data Contributor** role on the storage account.
 
 ### Option A – Zip deploy with Azure CLI
 
 ```powershell
-Compress-Archive -Path app, requirements.txt, pyproject.toml, startup.sh -DestinationPath app.zip -Force
+Compress-Archive -Path app, application.py, gunicorn.conf.py, requirements.txt, pyproject.toml, .deployment -DestinationPath app.zip -Force
 az webapp deploy -g <resource-group> -n <app-name> --src-path app.zip --type zip
 ```
 
@@ -133,7 +134,6 @@ az webapp deploy -g <resource-group> -n <app-name> --src-path app.zip --type zip
 
 ```powershell
 az webapp up --runtime "PYTHON:3.14" --sku B1 -n <unique-app-name> -g rg-indoorscore
-az webapp config set -g rg-indoorscore -n <unique-app-name> --startup-file "bash startup.sh"
 az webapp config appsettings set -g rg-indoorscore -n <unique-app-name> --settings STORAGE_PROVIDER=local DATA_DIR=/home/data
 ```
 
@@ -171,7 +171,7 @@ Example ball event, a 2 with 1 additional run (3 runs in total):
 
 ## Security notes
 
-- **No authentication.** The MVP has none, as specified. Put it behind App Service Authentication (Easy Auth) or restrict access if it's exposed publicly.
+- **Scorer access.** Match creation/import, live scoring, setup edits, and deletion require the shared `SCORER_PASSWORD` (default `scorer28`). Scorer sessions use an HttpOnly cookie and expire after eight hours. Set a strong password in production. Match lists, scorecards, PDFs, and JSON backups remain public; restrict the app with App Service Authentication (Easy Auth) if those should not be public.
 - **Input validation.** All input is validated with Pydantic. Match ids are restricted to `[A-Za-z0-9_-]`, which prevents path traversal.
 - **Response headers.** A strict Content-Security-Policy is applied (no inline scripts), plus `nosniff`, `no-referrer` and `frame-ancestors 'none'`.
 - **Safe rendering.** User-supplied names are HTML-escaped before they're rendered.

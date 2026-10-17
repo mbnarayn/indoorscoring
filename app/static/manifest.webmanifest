@@ -1,6 +1,6 @@
 {
-  "name": "Indoor Cricket Scorer",
-  "short_name": "Scorer",
+  "name": "Indoor Cricket Scoring App",
+  "short_name": "Indoor Scorer",
   "description": "Live ball-by-ball indoor cricket scoring",
   "id": "/",
   "start_url": "/",

@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Package app
-        run: zip -r app.zip app requirements.txt pyproject.toml startup.sh -x "**/__pycache__/*"
+        run: zip -r app.zip app application.py gunicorn.conf.py requirements.txt pyproject.toml .deployment -x "**/__pycache__/*"
       - uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}

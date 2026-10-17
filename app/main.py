@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -29,6 +30,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.settings = settings
         app.state.match_service = MatchService(create_storage_provider(settings))
+        app.state.scorer_sessions = {}
+        app.state.scorer_sessions_lock = threading.Lock()
         yield
 
     app = FastAPI(title="Indoor Cricket Scorer", version="1.0.0", lifespan=lifespan)

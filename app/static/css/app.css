@@ -72,7 +72,19 @@ small { font-size: 0.78em; }
   padding: calc(env(safe-area-inset-top) + 6px) 10px 6px;
   background: var(--surface); border-bottom: 1px solid var(--border);
 }
-.topbar h1 { flex: 1; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-brand {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: calc(100% - 120px); min-width: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; text-align: center; pointer-events: none;
+}
+.topbar h1 { max-width: 100%; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-code { display: none; color: var(--muted); font-size: 1.05rem; font-weight: 700; line-height: 1.1; }
+.brand-home .brand-code { display: block; }
+#theme-btn { margin-left: auto; }
+@media (max-width: 350px) {
+  .brand-home h1,
+  .brand-home .brand-code { font-size: 0.88rem; }
+}
 .icon-btn {
   min-width: 44px; height: 44px; border: 0; border-radius: 10px;
   background: var(--surface-2); color: var(--text); font-size: 1.5rem; cursor: pointer;
@@ -103,7 +115,9 @@ button:active:not(:disabled), .btn:active { transform: scale(0.97); filter: brig
 .card.error { border-color: var(--danger); color: var(--danger); }
 .list { display: flex; flex-direction: column; gap: 8px; }
 .match-card .card-main { display: flex; flex-direction: column; gap: 3px; text-decoration: none; }
-.card-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.card-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.backup-link { align-self: center; padding: 6px 2px; color: var(--muted); font-size: 0.78rem; }
+.import-link { align-self: flex-start; padding: 8px 2px; color: var(--muted); font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
 .badge { background: var(--warn); color: #000; border-radius: 999px; padding: 1px 8px; font-size: 0.75rem; }
 .row-between { display: flex; justify-content: space-between; gap: 8px; }
 .banner { background: var(--surface-2); border-left: 4px solid var(--warn); padding: 8px 10px; border-radius: 8px; font-size: 0.85rem; }
@@ -201,6 +215,7 @@ button:active:not(:disabled), .btn:active { transform: scale(0.97); filter: brig
 .tbl th, .tbl td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--border); }
 .tbl th:first-child, .tbl td:first-child { text-align: left; }
 .tbl td small { color: var(--muted); }
+.tbl td small.pair-dismissal { display: block; }
 .tbl tr.retired td:first-child div::after { content: " (retired)"; color: var(--warn); font-size: 0.8em; }
 
 /* Bottom sheet */
@@ -228,6 +243,65 @@ button:active:not(:disabled), .btn:active { transform: scale(0.97); filter: brig
   .sb-score { font-size: 2.1rem; }
   .btn-extra { min-height: 40px; }
   .btn-undo { min-height: 46px; }
+}
+@media (max-width: 600px) {
+  .scoring-screen {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 0.9rem;
+  }
+  .scoring-screen .scoreboard { padding: 5px 9px; }
+  .scoring-screen .sb-score { font-size: 2rem; }
+  .scoring-screen .sb-overs { font-size: 1.05rem; }
+  .scoring-screen .batters { gap: 5px; }
+  .scoring-screen .batter { min-height: 46px; padding: 5px 7px; }
+  .scoring-screen .b-stats { font-size: 0.76rem; }
+  .scoring-screen .b-stats b { font-size: 0.95rem; }
+  .scoring-screen .over { min-height: 28px; }
+  .scoring-screen .draft { min-height: 30px; }
+  .scoring-screen .pad { gap: 5px; }
+  .scoring-screen .btn-run { min-height: 48px; font-size: 1.45rem; }
+  .scoring-screen .btn-out { font-size: 1.1rem; }
+  .scoring-screen .custom-runs { gap: 5px; }
+  .scoring-screen .custom-runs input { min-height: 40px; font-size: 1rem; }
+  .scoring-screen .custom-runs .btn { min-height: 40px; }
+  .scoring-screen .btn-extra { min-height: 38px; font-size: 0.82rem; }
+  .scoring-screen .btn-retire { min-height: 36px; font-size: 0.82rem; }
+  .scoring-screen .util { gap: 5px; }
+  .scoring-screen .btn-small { min-height: 34px; padding: 0 7px; font-size: 0.78rem; }
+  .scoring-screen .btn-undo { min-height: 40px; font-size: 0.9rem; }
+
+  .sheet-body:has(.dismissal-screen) {
+    max-height: 92dvh;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    gap: 6px;
+    font-size: 0.9rem;
+  }
+  .dismissal-screen { display: flex; flex-direction: column; gap: 5px; }
+  .dismissal-screen h2 { font-size: 1rem; margin: 0; }
+  .dismissal-screen h3 { font-size: 0.85rem; margin: 0; }
+  .dismissal-screen .grid2,
+  .dismissal-screen .grid3,
+  .dismissal-screen .grid4 { gap: 5px; }
+  .dismissal-screen .choice { min-height: 38px; padding: 4px 5px; font-size: 0.82rem; }
+  .dismissal-screen .btn-run,
+  .dismissal-screen .btn-minus { min-height: 40px; font-size: 1.15rem; }
+  .dismissal-screen > .btn { min-height: 38px; }
+}
+@media (max-width: 600px) and (max-height: 700px) {
+  .scoring-screen { gap: 3px; font-size: 0.84rem; }
+  .scoring-screen .sb-score { font-size: 1.8rem; }
+  .scoring-screen .batter { min-height: 40px; padding: 4px 6px; }
+  .scoring-screen .over { min-height: 23px; }
+  .scoring-screen .draft { min-height: 25px; }
+  .scoring-screen .btn-run { min-height: 40px; font-size: 1.25rem; }
+  .scoring-screen .btn-out { font-size: 1rem; }
+  .scoring-screen .custom-runs input,
+  .scoring-screen .custom-runs .btn { min-height: 36px; }
+  .scoring-screen .btn-extra { min-height: 32px; }
+  .scoring-screen .btn-retire { min-height: 30px; }
+  .scoring-screen .btn-undo { min-height: 34px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

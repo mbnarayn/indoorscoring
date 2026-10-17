@@ -1,5 +1,5 @@
 /* Service worker: app-shell caching + network-first API caching so matches open offline. */
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL_CACHE = `shell-${VERSION}`;
 const DATA_CACHE = `data-${VERSION}`;
 const SHELL_ASSETS = [

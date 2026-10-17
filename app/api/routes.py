@@ -1,21 +1,77 @@
 import hmac
 import json
 import re
+import secrets
+import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from app.api.schemas import EditBallRequest, EventRequest, MatchCreate, MatchDetailsUpdate, MatchDocument, UndoRequest
+from app.api.schemas import EditBallRequest, EventRequest, MatchCreate, MatchDetailsUpdate, MatchDocument, ScorerLogin, UndoRequest
 from app.services.match_service import MatchService
 from app.services.pdf_export import render_scorecard_pdf
 
 router = APIRouter(prefix="/api")
+SCORER_SESSION_TTL = 8 * 60 * 60
 
 
 def get_service(request: Request) -> MatchService:
     return request.app.state.match_service
+
+
+def require_scorer(request: Request) -> None:
+    token = request.cookies.get("scorer_session")
+    sessions = request.app.state.scorer_sessions
+    with request.app.state.scorer_sessions_lock:
+        expires_at = sessions.get(token) if token else None
+        if expires_at is None or expires_at <= time.time():
+            if token:
+                sessions.pop(token, None)
+            raise HTTPException(401, "Scorer login required")
+
+
+@router.post("/scorer/session")
+def create_scorer_session(body: ScorerLogin, request: Request, response: Response) -> dict:
+    expected = request.app.state.settings.scorer_password
+    if not hmac.compare_digest(body.password.encode(), expected.encode()):
+        raise HTTPException(403, "Incorrect scorer password")
+    token = secrets.token_urlsafe(32)
+    with request.app.state.scorer_sessions_lock:
+        request.app.state.scorer_sessions[token] = time.time() + SCORER_SESSION_TTL
+    response.set_cookie(
+        "scorer_session",
+        token,
+        max_age=SCORER_SESSION_TTL,
+        httponly=True,
+        secure=request.headers.get("x-forwarded-proto", request.url.scheme).split(",", 1)[0].strip() == "https",
+        samesite="strict",
+        path="/api",
+    )
+    return {"authenticated": True}
+
+
+@router.get("/scorer/session")
+def scorer_session(request: Request) -> dict:
+    try:
+        require_scorer(request)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return {"authenticated": False}
+        raise
+    return {"authenticated": True}
+
+
+@router.delete("/scorer/session", status_code=204)
+def delete_scorer_session(request: Request) -> Response:
+    token = request.cookies.get("scorer_session")
+    if token:
+        with request.app.state.scorer_sessions_lock:
+            request.app.state.scorer_sessions.pop(token, None)
+    response = Response(status_code=204)
+    response.delete_cookie("scorer_session", path="/api", samesite="strict")
+    return response
 
 
 @router.get("/health")
@@ -32,12 +88,16 @@ def list_matches(
 
 
 @router.post("/matches", status_code=201)
-def create_match(body: MatchCreate, service: MatchService = Depends(get_service)) -> dict:
+def create_match(
+    body: MatchCreate, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)
+) -> dict:
     return service.create_match(body.model_dump())
 
 
 @router.post("/matches/import", status_code=201)
-async def import_match(request: Request, service: MatchService = Depends(get_service)) -> dict:
+async def import_match(
+    request: Request, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)
+) -> dict:
     limit = request.app.state.settings.max_import_bytes
     raw = await request.body()
     if len(raw) > limit:
@@ -52,7 +112,7 @@ async def import_match(request: Request, service: MatchService = Depends(get_ser
 
 
 @router.get("/matches/{match_id}")
-def get_match(match_id: str, service: MatchService = Depends(get_service)) -> dict:
+def get_match(match_id: str, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)) -> dict:
     return service.get_view(match_id)
 
 
@@ -60,6 +120,7 @@ def get_match(match_id: str, service: MatchService = Depends(get_service)) -> di
 def delete_match(
     match_id: str,
     request: Request,
+    _: None = Depends(require_scorer),
     x_delete_password: str | None = Header(default=None),
     service: MatchService = Depends(get_service),
 ) -> Response:
@@ -71,27 +132,37 @@ def delete_match(
 
 
 @router.put("/matches/{match_id}/details")
-def update_details(match_id: str, body: MatchDetailsUpdate, service: MatchService = Depends(get_service)) -> dict:
+def update_details(
+    match_id: str, body: MatchDetailsUpdate, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)
+) -> dict:
     return service.update_details(match_id, body.model_dump())
 
 
 @router.post("/matches/{match_id}/events")
-def add_event(match_id: str, body: EventRequest, service: MatchService = Depends(get_service)) -> dict:
+def add_event(
+    match_id: str, body: EventRequest, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)
+) -> dict:
     return service.add_event(match_id, body.event.model_dump(exclude_none=True), body.op_id)
 
 
 @router.put("/matches/{match_id}/events/{index}")
-def edit_ball(match_id: str, index: int, body: EditBallRequest, service: MatchService = Depends(get_service)) -> dict:
+def edit_ball(
+    match_id: str, index: int, body: EditBallRequest, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)
+) -> dict:
     return service.edit_ball(match_id, index, body.event.model_dump(exclude_none=True), body.op_id)
 
 
 @router.post("/matches/{match_id}/undo")
-def undo(match_id: str, body: UndoRequest | None = None, service: MatchService = Depends(get_service)) -> dict:
+def undo(
+    match_id: str, body: UndoRequest | None = None, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)
+) -> dict:
     return service.undo(match_id, body.op_id if body else None)
 
 
 @router.post("/matches/{match_id}/cancel-retire")
-def cancel_retire(match_id: str, body: UndoRequest | None = None, service: MatchService = Depends(get_service)) -> dict:
+def cancel_retire(
+    match_id: str, body: UndoRequest | None = None, _: None = Depends(require_scorer), service: MatchService = Depends(get_service)
+) -> dict:
     return service.cancel_retirement(match_id, body.op_id if body else None)
 
 

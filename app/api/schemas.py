@@ -40,11 +40,15 @@ class MatchCreate(_Strict):
     teams: list[TeamIn] = Field(min_length=2, max_length=2)
 
 
+class ScorerLogin(_Strict):
+    password: str
+
+
 # ---- events -------------------------------------------------------------------
 
 
 class Dismissal(_Strict):
-    type: Literal["bowled", "caught", "run_out", "hit_wicket", "other", "retired"]
+    type: Literal["bowled", "caught", "run_out", "stumped", "hit_wicket", "other", "retired"]
     batsman: PlayerId | None = None
     fielders: list[PlayerId] = Field(default_factory=list, max_length=2)
 

@@ -7,9 +7,9 @@ replaying those events, which keeps auto-save trivial and makes undo exact (see 
 from dataclasses import dataclass, field
 from typing import Any
 
-DISMISSAL_TYPES = ("bowled", "caught", "run_out", "hit_wicket", "other", "retired")
-BOWLER_CREDITED = frozenset({"bowled", "caught", "hit_wicket"})
-STRIKER_ONLY = frozenset({"bowled", "caught", "hit_wicket"})
+DISMISSAL_TYPES = ("bowled", "caught", "run_out", "stumped", "hit_wicket", "other", "retired")
+BOWLER_CREDITED = frozenset({"bowled", "caught", "stumped", "hit_wicket"})
+STRIKER_ONLY = frozenset({"bowled", "caught", "stumped", "hit_wicket"})
 EXTRA_TYPES = ("wide", "no_ball", "bye", "leg_bye")
 MAX_ADDITIONAL_COMPONENTS = 10
 MAX_RUNS = 50
@@ -350,10 +350,12 @@ class MatchEngine:
                 raise MatchError("Dismissed batsman must be at the crease")
             if dtype in STRIKER_ONLY and out_id != inn.striker:
                 raise MatchError(f"Only the striker can be out {dtype.replace('_', ' ')}")
-            if extra in ("wide", "no_ball") and dtype in STRIKER_ONLY and not (extra == "wide" and dtype == "hit_wicket"):
+            if extra in ("wide", "no_ball") and dtype in STRIKER_ONLY and not (
+                extra == "wide" and dtype in {"hit_wicket", "stumped"}
+            ):
                 raise MatchError(f"Batsman cannot be out {dtype.replace('_', ' ')} off a {extra.replace('_', ' ')}")
             fielders = dismissal.get("fielders") or []
-            max_fielders = {"caught": 1, "run_out": 2}.get(dtype, 0)
+            max_fielders = {"caught": 1, "run_out": 2, "stumped": 1}.get(dtype, 0)
             if not isinstance(fielders, list) or len(fielders) > max_fielders or len(set(fielders)) != len(fielders):
                 raise MatchError(f"Too many fielders for {dtype.replace('_', ' ')}")
             for f in fielders:
@@ -508,9 +510,12 @@ def _describe_dismissal(dtype: str, bowler_name: str, fielder_names: list[str], 
         return f"c & b {bowler_name}" if caught_by_bowler else f"c {fielder_names[0]} b {bowler_name}"
     if dtype == "run_out" and fielder_names:
         return f"run out ({' / '.join(fielder_names)})"
+    if dtype == "stumped" and fielder_names:
+        return f"st {fielder_names[0]} b {bowler_name}"
     return {
         "bowled": f"b {bowler_name}",
         "caught": f"caught b {bowler_name}",
+        "stumped": f"stumped b {bowler_name}",
         "hit_wicket": f"hit wicket b {bowler_name}",
         "run_out": "run out",
         "other": "out (other)",
