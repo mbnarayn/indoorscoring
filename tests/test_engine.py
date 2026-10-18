@@ -290,6 +290,15 @@ def test_bowling_figures_and_economy():
     assert figures["t1p1"]["overs"] == "0.1" and figures["t1p1"]["economy"] == 24.0
 
 
+def test_scorecard_delivery_totals_include_extras_and_negative_runs():
+    engine = Builder(overs=3).add(
+        start(), ball(3, extra="no_ball"), ball(0, extra="wide"), ball(-2), ball(4, additional=[1])
+    ).engine()
+    card = innings_scorecard(engine, engine.current)
+    assert [delivery["total"] for delivery in card["balls"]] == [5, 2, -2, 5]
+    assert sum(delivery["total"] for delivery in card["balls"]) == card["runs"]
+
+
 def test_pairing_overs_keep_batsman_in_and_count_wickets():
     b = Builder(overs=2, players=4).add(
         start(),
@@ -316,6 +325,60 @@ def test_dismissal_after_pairing_overs_removes_batsman():
     e = b.engine()
     assert e.next_action == "select_batsman"
     assert live_state(e)["current"]["in_pairing"] is False
+
+
+def test_pairing_retires_both_after_every_two_overs_and_undo_restores_pair():
+    builder = Builder(overs=6, balls_per_over=2)
+    builder.match["settings"]["pairing_overs"] = 4
+    builder.add(start(), ball(0), ball(0))
+    assert builder.engine().next_action == "select_bowler"
+    builder.add({"type": "bowler", "bowler": "t1p1"}, ball(0), ball(0, auto_retire_pair=True))
+    innings = builder.engine().current
+    assert innings.striker is None and innings.non_striker is None
+    assert innings.batters["t0p0"].status == "retired"
+    assert innings.batters["t0p1"].status == "retired"
+    assert innings.wickets == 0
+    assert builder.engine().next_action == "select_batsman"
+
+    builder.add({"type": "new_batsman", "batsman": "t0p2"})
+    assert builder.engine().next_action == "select_batsman"
+    builder.add({"type": "new_batsman", "batsman": "t0p3"})
+    assert builder.engine().next_action == "select_bowler"
+    builder.add({"type": "bowler", "bowler": "t1p0"}, ball(0), ball(0))
+    assert builder.engine().next_action == "select_bowler"
+    builder.add({"type": "bowler", "bowler": "t1p1"}, ball(0), ball(0, auto_retire_pair=True))
+    assert builder.engine().next_action == "select_batsman"
+    assert builder.engine().current.batters["t0p2"].status == "retired"
+    assert builder.engine().current.batters["t0p3"].status == "retired"
+
+    builder.match["events"] = undo_last_ball(builder.match["events"])
+    innings = builder.engine().current
+    assert innings.striker and innings.non_striker
+    assert innings.batters["t0p2"].status == "batting"
+    assert innings.batters["t0p3"].status == "batting"
+
+
+@pytest.mark.parametrize("pairing_overs,overs", [(0, 4), (1, 4), (2, 2)])
+def test_pair_retirement_skips_non_pairing_and_finished_innings(pairing_overs, overs):
+    builder = Builder(overs=overs, balls_per_over=2)
+    builder.match["settings"]["pairing_overs"] = pairing_overs
+    engine = builder.add(
+        start(), ball(0), ball(0), {"type": "bowler", "bowler": "t1p1"}, ball(0), ball(0, auto_retire_pair=True)
+    ).engine()
+    assert engine.current.batters["t0p0"].status == "batting"
+    assert engine.current.batters["t0p1"].status == "batting"
+
+
+def test_legacy_pairing_deliveries_do_not_retire_batsmen_on_replay():
+    builder = Builder(overs=4, balls_per_over=2)
+    builder.match["settings"]["pairing_overs"] = 2
+    engine = builder.add(
+        start(), ball(0), ball(0), {"type": "bowler", "bowler": "t1p1"}, ball(0), ball(0),
+        {"type": "bowler", "bowler": "t1p0"}, ball(1)
+    ).engine()
+    assert engine.current.legal_balls == 5
+    assert engine.current.batters["t0p0"].status == "batting"
+    assert engine.current.batters["t0p1"].status == "batting"
 
 
 def test_set_pairing_overs_event_and_undo_keeps_it():

@@ -62,6 +62,7 @@ def delivery_view(engine: MatchEngine, d: Delivery) -> dict[str, Any]:
         "event_index": d.event_index,
         "over": d.over + 1,
         "label": d.label,
+        "total": d.total,
         "striker": d.striker,
         "non_striker": d.non_striker,
         "striker_name": engine.player_name(d.striker),

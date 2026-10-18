@@ -119,6 +119,8 @@ class MatchService:
             if op_id and op_id in doc.get("recent_ops", []):
                 return self._view(doc)  # duplicate submission (e.g. offline replay retry)
             event = {**event, "ts": _now()}
+            if event.get("type") == "ball":
+                event["auto_retire_pair"] = True
             doc["events"] = [*doc.get("events", []), event]
             self._remember_op(doc, op_id)
             return self._persist(doc)
@@ -151,6 +153,7 @@ class MatchService:
             if not 0 <= index < len(events) or events[index].get("type") != "ball":
                 raise MatchError("That ball can no longer be edited")
             replaced = {**event, "ts": events[index].get("ts") or _now()}
+            replaced["auto_retire_pair"] = events[index].get("auto_retire_pair", False)
             doc["events"] = [*events[:index], replaced, *events[index + 1 :]]
             try:
                 MatchEngine(doc)

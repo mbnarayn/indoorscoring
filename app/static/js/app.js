@@ -344,7 +344,7 @@
   // ----------------------------------------------------------------- match --
 
   function resetDraft() {
-    ctx.draft = { striker: null, custom: '' };
+    ctx.draft = { striker: null, custom: '', extra: null };
   }
 
   function playerName(id) {
@@ -512,6 +512,9 @@
     if (!ctx.draft.striker && ctx.view.state.current) {
       return '<div class="draft muted">Select the striker, then tap runs</div>';
     }
+    if (ctx.draft.extra === 'no_ball') {
+      return '<div class="draft armed">No ball selected</div>';
+    }
     return '<div class="draft muted">Tap runs, Wide or No ball to record the ball</div>';
   }
 
@@ -550,7 +553,7 @@
         <button class="btn" data-act="custom-runs" ${lock}>Record</button>
       </div>
       <div class="pad pad-extras">
-        ${EXTRAS.map(([k, l]) => `<button class="btn-extra" data-act="extra" data-x="${k}" ${lock}>${l} +${extraRuns[k]}</button>`).join('')}
+        ${EXTRAS.map(([k, l]) => `<button class="btn-extra ${d.extra === k ? 'active' : ''}" data-act="extra" data-x="${k}" ${k === 'no_ball' ? `aria-pressed="${d.extra === k}"` : ''} ${lock}>${l} +${extraRuns[k]}</button>`).join('')}
       </div>
       <div class="pad pad-retire">
         <button class="btn-retire" data-act="retire-one">Retire Batsman</button>
@@ -675,7 +678,7 @@
   }
   setInterval(() => navigator.onLine && syncOutbox(), 15000);
 
-  function submitBall(runs, dismissal, extra = null) {
+  function submitBall(runs, dismissal, extra = ctx.draft.extra) {
     const d = ctx.draft;
     const ev = { type: 'ball', runs, extra };
     if (d.striker) ev.striker = d.striker;
@@ -762,8 +765,9 @@
     const draw = () =>
       openSheet(
         `<div class="dismissal-screen"><h2>Dismissal</h2>
+        ${ctx.draft.extra === 'no_ball' ? '<div class="muted">No ball</div>' : ''}
         <div class="grid3">${DISMISSALS.map(
-          ([t, l]) => `<button class="choice ${w.type === t ? 'sel' : ''}" data-act="dtype" data-t="${t}">${l}</button>`
+          ([t, l]) => `<button class="choice ${w.type === t ? 'sel' : ''}" data-act="dtype" data-t="${t}" ${ctx.draft.extra === 'no_ball' && STRIKER_ONLY.includes(t) ? 'disabled' : ''}>${l}</button>`
         ).join('')}</div>
         <h3>Batsman</h3><div class="grid2">${[strikerId, nonId]
           .filter(Boolean)
@@ -946,7 +950,8 @@
         const overs = [];
         inn.balls.forEach((b, bi) => {
           const last = overs[overs.length - 1];
-          if (!last || last.over !== b.over) overs.push({ over: b.over, bowler: b.bowler_name, balls: [] });
+          if (!last || last.over !== b.over) overs.push({ over: b.over, bowler: b.bowler_name, balls: [], total: 0 });
+          overs[overs.length - 1].total += b.total;
           const chip = scorerUnlocked
             ? `<button class="chip chip-btn ${chipClass(b.label)}" data-act="sc-edit" data-inn="${inn.number - 1}" data-i="${bi}"
                 title="${esc(b.striker_name)} facing">${esc(b.label)}</button>`
@@ -956,7 +961,7 @@
         const ballByBall = overs.length
           ? `<details class="bbb"><summary>Ball by ball ${scorerUnlocked ? '<span class="muted">(tap a ball to edit)</span>' : ''}</summary>
               ${overs
-                .map((o) => `<div class="bbb-over"><span class="muted">Ov ${o.over} · ${esc(o.bowler)}</span><div class="bbb-balls">${o.balls.join('')}</div></div>`)
+                .map((o) => `<div class="bbb-over"><span class="muted">Ov ${o.over} · ${esc(o.bowler)} · Total: ${o.total}</span><div class="bbb-balls">${o.balls.join('')}</div></div>`)
                 .join('')}</details>`
           : '';
         return `<section class="card">
@@ -1120,6 +1125,10 @@
       case 'custom-runs':
         return submitCustomRuns();
       case 'extra':
+        if (ds.x === 'no_ball') {
+          ctx.draft.extra = ctx.draft.extra === 'no_ball' ? null : 'no_ball';
+          return drawMatch();
+        }
         return submitBall(0, null, ds.x);
       case 'striker':
         ctx.draft.striker = ds.id;

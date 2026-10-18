@@ -55,6 +55,7 @@ class Dismissal(_Strict):
 
 class BallEvent(_Strict):
     type: Literal["ball"]
+    auto_retire_pair: bool = False
     striker: PlayerId | None = None
     runs: int = Field(0, ge=-3, le=50)
     additional: list[Annotated[int, Field(ge=1, le=6)]] = Field(default_factory=list, max_length=10)

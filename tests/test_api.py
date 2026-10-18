@@ -82,6 +82,21 @@ def test_scorer_password_protects_live_api_but_not_scorecard(client):
     assert client.get(f"/api/matches/{mid}").status_code == 401
 
 
+def test_pairing_boundary_retires_pair_and_survives_backup_import(client):
+    match = {**MATCH, "settings": {"overs": 3, "balls_per_over": 1, "pairing_overs": 2}}
+    mid = client.post("/api/matches", json=match).json()["match"]["id"]
+    post_event(client, mid, {"type": "innings_start", "batting_team": 0, "striker": "t0p0", "non_striker": "t0p1", "bowler": "t1p0"})
+    post_event(client, mid, {"type": "ball", "runs": 0})
+    post_event(client, mid, {"type": "bowler", "bowler": "t1p1"})
+    state = post_event(client, mid, {"type": "ball", "runs": 0}).json()["state"]
+    assert state["next_action"] == "select_batsman"
+    exported = client.get(f"/api/matches/{mid}/export")
+    assert exported.json()["events"][-1]["auto_retire_pair"] is True
+    imported = client.post("/api/matches/import", content=exported.content)
+    assert imported.status_code == 201
+    assert imported.json()["state"]["next_action"] == "select_batsman"
+
+
 def test_invalid_event_returns_400_and_is_not_saved(client):
     mid = client.post("/api/matches", json=MATCH).json()["match"]["id"]
     r = post_event(client, mid, {"type": "ball", "runs": 1})

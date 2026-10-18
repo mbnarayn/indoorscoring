@@ -428,6 +428,17 @@ class MatchEngine:
 
         self._check_innings_end(inn)
 
+        if (
+            ev.get("auto_retire_pair", False)
+            and not inn.complete
+            and pairing
+            and legal
+            and inn.legal_balls % (2 * self.balls_per_over) == 0
+        ):
+            for player_id in (inn.striker, inn.non_striker):
+                if player_id is not None:
+                    self._remove_batter(inn, player_id, "retired")
+
     def _remove_batter(
         self,
         inn: Innings,
