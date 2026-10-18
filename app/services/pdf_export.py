@@ -99,8 +99,10 @@ def render_scorecard_pdf(scorecard: dict[str, Any]) -> bytes:
             how = b.get("dismissal") or ""
             if b.get("pair_dismissals"):
                 how += f"; out {len(b['pair_dismissals'])}x in pairs ({'; '.join(b['pair_dismissals'])})"
-            batting_rows.append([b["name"], how, b["runs"], b["balls"], b["fours"], b["sixes"], f"{b['strike_rate']:.1f}"])
-        _table(pdf, ["Batsman", "How out", "R", "B", "4s", "6s", "SR"], batting_rows, (34, 76, 14, 14, 12, 12, 18), text_cols=2)
+            batting_rows.append(
+                [b["name"], how, b["runs"], b["balls"], b["wides_faced"], b["fours"], b["sixes"], f"{b['strike_rate']:.1f}"]
+            )
+        _table(pdf, ["Batsman", "How out", "R", "B", "Wd", "4s", "6s", "SR"], batting_rows, (30, 68, 12, 12, 12, 12, 12, 22), text_cols=2)
 
         x = inn["extras"]
         _line(pdf, "Extras", f"{x['total']} (wd {x['wide']}, nb {x['no_ball']})")

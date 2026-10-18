@@ -23,6 +23,7 @@ def batter_view(engine: MatchEngine, b: Batter) -> dict[str, Any]:
         "shirt": info.get("shirt"),
         "runs": b.runs,
         "balls": b.balls,
+        "wides_faced": b.wides_faced,
         "fours": b.fours,
         "sixes": b.sixes,
         "strike_rate": strike_rate(b.runs, b.balls),

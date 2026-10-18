@@ -465,7 +465,7 @@
             <span class="b-name">${esc(b.name)}</span>
             <span class="b-stats"><b>${b.runs}</b> (${b.balls}) · SR ${fmt(b.strike_rate, 1)}${
               b.pair_dismissals?.length ? ` · <span class="outs">out ${b.pair_dismissals.length}×</span>` : ''
-            }</span></button>`
+            }</span><span class="b-stats">Wides faced: ${b.wides_faced ?? 0}</span></button>`
         : '<div class="batter vacant">Awaiting batsman</div>';
     const title = chosen ? '' : '<div class="facing-prompt">Who is facing this ball?</div>';
     return `${title}<div class="batters">${card(c.striker)}${card(c.non_striker)}</div>`;
@@ -937,7 +937,7 @@
               <small>${esc(b.dismissal || '')}</small>${(b.pair_dismissals || [])
                 .map((dismissal, i) => `<small class="pair-dismissal">Pair ${i + 1}: ${esc(dismissal)}</small>`)
                 .join('')}</td>
-              <td><b>${b.runs}</b></td><td>${b.balls}</td><td>${b.fours}</td><td>${b.sixes}</td><td>${fmt(b.strike_rate, 1)}</td></tr>`
+              <td><b>${b.runs}</b></td><td>${b.balls}</td><td>${b.wides_faced ?? 0}</td><td>${b.fours}</td><td>${b.sixes}</td><td>${fmt(b.strike_rate, 1)}</td></tr>`
           )
           .join('');
         const bowl = inn.bowling
@@ -968,7 +968,7 @@
           <h2>${esc(inn.batting_team_name)} <span class="muted">Innings ${inn.number}</span></h2>
           <div class="sb-score small">${inn.runs}/${inn.wickets} <small>(${inn.overs} ov, RR ${fmt(inn.run_rate)})</small></div>
           ${inn.target ? `<div class="muted">Target ${inn.target}</div>` : ''}
-          <table class="tbl"><thead><tr><th>Batting</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>${bat}</tbody></table>
+          <table class="tbl"><thead><tr><th>Batting</th><th>R</th><th>B</th><th title="Wides faced">Wd</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>${bat}</tbody></table>
           <div class="row-between"><span>Extras</span><span><b>${x.total}</b> (wd ${x.wide}, nb ${x.no_ball})</span></div>
           <div class="row-between"><span>Total</span><b>${inn.runs}/${inn.wickets} (${inn.overs} ov)</b></div>
           ${inn.retired.length ? `<div><span class="muted">Retired not out:</span> ${esc(inn.retired.join(', '))}</div>` : ''}

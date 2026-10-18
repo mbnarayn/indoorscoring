@@ -56,7 +56,7 @@ tests/                    Unit tests (engine, undo, stats) and API tests
 | Delivery | Team runs | Batsman | Bowler | Counts as a ball |
 |---|---|---|---|---|
 | Runs (+ additional) | runs + additional | runs + additional, ball faced | charged | yes |
-| Wide | penalty + runs | ball faced (except last over) | charged | yes, **re-bowled in the last over** |
+| Wide | penalty + runs | no ball faced; tracked as wides faced | charged | yes, **re-bowled in the last over** |
 | No ball | penalty + runs | runs, ball faced | charged | yes, **re-bowled in the last over** |
 | Bye / Leg bye | runs | ball faced | not charged | yes |
 

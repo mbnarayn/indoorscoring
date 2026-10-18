@@ -26,6 +26,7 @@ class Batter:
     order: int
     runs: int = 0
     balls: int = 0
+    wides_faced: int = 0
     fours: int = 0
     sixes: int = 0
     status: str = "batting"  # batting | out | retired
@@ -379,8 +380,10 @@ class MatchEngine:
                 batter.fours += 1
             elif runs == 6:
                 batter.sixes += 1
-        if extra != "wide" or legal:
+        if extra != "wide":
             batter.balls += 1
+        else:
+            batter.wides_faced += 1
 
         if extra == "wide":
             inn.extras["wide"] += total

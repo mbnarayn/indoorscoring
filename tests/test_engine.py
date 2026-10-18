@@ -62,7 +62,8 @@ def test_extras_before_last_over_are_legal_deliveries_worth_two():
     assert bowler.runs == 2 + 4 + 6  # byes and leg byes are not charged to the bowler
     assert bowler.balls == 5 and bowler.wides == 2 and bowler.no_balls == 1
     assert inn.batters["t0p0"].runs == 4  # runs off the bat from the no ball
-    assert inn.batters["t0p0"].balls == 4
+    assert inn.batters["t0p0"].balls == 2
+    assert inn.batters["t0p0"].wides_faced == 2
 
 
 def test_extras_in_last_over_are_rebowled_and_worth_one():
@@ -72,6 +73,24 @@ def test_extras_in_last_over_are_rebowled_and_worth_one():
     assert inn.runs == 2
     assert inn.legal_balls == 6
     assert inn.batters["t0p1"].balls == 1  # wide not faced, no ball faced
+    assert inn.batters["t0p1"].wides_faced == 1
+
+
+def test_wides_faced_follow_striker_and_undo_replays_counts():
+    builder = Builder(overs=3).add(
+        start(), ball(0, extra="wide", striker="t0p0"), ball(0, extra="wide", striker="t0p1"),
+        ball(4, striker="t0p0"), ball(0, extra="wide", striker="t0p0")
+    )
+    engine = builder.engine()
+    batters = {b["id"]: b for b in innings_scorecard(engine, engine.current)["batting"]}
+    assert batters["t0p0"]["wides_faced"] == 2
+    assert batters["t0p0"]["balls"] == 1
+    assert batters["t0p0"]["strike_rate"] == 400
+    assert batters["t0p1"]["wides_faced"] == 1
+    assert batters["t0p1"]["balls"] == 0
+    assert live_state(engine)["current"]["striker"]["wides_faced"] == 2
+    builder.match["events"] = undo_last_ball(builder.match["events"])
+    assert builder.engine().current.batters["t0p0"].wides_faced == 1
 
 
 def test_configurable_penalty_runs():

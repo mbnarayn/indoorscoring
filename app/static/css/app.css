@@ -290,7 +290,7 @@ button:active:not(:disabled), .btn:active { transform: scale(0.97); filter: brig
   .dismissal-screen > .btn { min-height: 38px; }
 }
 @media (max-width: 600px) and (max-height: 700px) {
-  .scoring-screen { gap: 3px; font-size: 0.84rem; }
+  .scoring-screen { gap: 2px; font-size: 0.84rem; }
   .scoring-screen .sb-score { font-size: 1.8rem; }
   .scoring-screen .batter { min-height: 40px; padding: 4px 6px; }
   .scoring-screen .over { min-height: 23px; }
