@@ -336,6 +336,33 @@ def test_pairing_overs_keep_batsman_in_and_count_wickets():
     assert live_state(e)["current"]["in_pairing"] is True
 
 
+@pytest.mark.parametrize("dismissed_batsman", ["t0p0", "t0p1"])
+def test_negative_pairing_dismissal_runs_are_charged_to_dismissed_batsman(dismissed_batsman):
+    builder = Builder(overs=2)
+    builder.match["settings"]["pairing_overs"] = 1
+    dismissal = {"type": "run_out", "batsman": dismissed_batsman, "fielders": ["t1p1"]}
+    engine = builder.add(start(), ball(-3, dismissal=dismissal)).engine()
+    innings = engine.current
+    assert innings.runs == -3
+    assert innings.batters[dismissed_batsman].runs == -3
+    other_batsman = "t0p1" if dismissed_batsman == "t0p0" else "t0p0"
+    assert innings.batters[other_batsman].runs == 0
+    assert innings.bowlers["t1p0"].runs == 0
+    assert innings.batters["t0p0"].balls == 1
+    assert innings.batters["t0p1"].balls == 0
+
+
+def test_negative_pairing_dismissal_additional_runs_stay_with_striker():
+    builder = Builder(overs=2)
+    builder.match["settings"]["pairing_overs"] = 1
+    engine = builder.add(
+        start(), ball(-3, additional=[1], dismissal={"type": "run_out", "batsman": "t0p1", "fielders": ["t1p1"]})
+    ).engine()
+    assert engine.current.batters["t0p0"].runs == 1
+    assert engine.current.batters["t0p1"].runs == -3
+    assert engine.current.runs == -2
+
+
 def test_dismissal_after_pairing_overs_removes_batsman():
     b = Builder(overs=2).add(
         start(), *[ball(0) for _ in range(6)], {"type": "bowler", "bowler": "t1p1"}, ball(0, dismissal={"type": "bowled"})

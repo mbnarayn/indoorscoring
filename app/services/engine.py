@@ -364,6 +364,7 @@ class MatchEngine:
 
         bat_runs = runs + sum(additional)
         pairing = self.in_pairing(inn)
+        negative_run_to_dismissed_batsman = pairing and dtype is not None and dtype != "retired" and runs < 0
         over_index = inn.legal_balls // self.balls_per_over
         last_over = self.in_last_over(inn)
         is_penalty_extra = extra in ("wide", "no_ball")
@@ -375,11 +376,13 @@ class MatchEngine:
         batter = inn.batters[inn.striker]
         bowler = inn.bowlers[inn.bowler]
         if extra in (None, "no_ball"):
-            batter.runs += bat_runs
+            batter.runs += bat_runs - runs if negative_run_to_dismissed_batsman else bat_runs
             if runs == 4:
                 batter.fours += 1
             elif runs == 6:
                 batter.sixes += 1
+        if negative_run_to_dismissed_batsman:
+            inn.batters[out_id].runs += runs
         if extra != "wide":
             batter.balls += 1
         else:
